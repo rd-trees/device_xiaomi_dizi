@@ -43,6 +43,9 @@ public class PenSettingsFragment extends PreferenceFragment implements
     private static final String KEY_APP_UP = "dizi_pen_button_up_app";
     private static final String KEY_APP_DOWN = "dizi_pen_button_down_app";
     private static final String PROP_FORCE = "persist.vendor.pen.force";
+    // Keep in sync with DiziPen PenMonitor, which copies it to PROP_FORCE:
+    // devicesettings_app may read the property but not set it.
+    private static final String SETTING_FORCE = "dizi_pen_force";
     private static final String PEN_NAME = "Redmi Smart Pen";
 
     private static final String PREF_STATUS = "pen_status";
@@ -135,7 +138,8 @@ public class PenSettingsFragment extends PreferenceFragment implements
     public boolean onPreferenceChange(Preference preference, Object newValue) {
         String key = preference.getKey();
         if (PREF_FORCE.equals(key)) {
-            SystemProperties.set(PROP_FORCE, (Boolean) newValue ? "true" : "false");
+            Settings.Secure.putInt(getContext().getContentResolver(), SETTING_FORCE,
+                    (Boolean) newValue ? 1 : 0);
             return true;
         }
         Settings.Secure.putString(getContext().getContentResolver(), key, (String) newValue);

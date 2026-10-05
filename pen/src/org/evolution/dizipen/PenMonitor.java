@@ -5,9 +5,14 @@
 
 package org.evolution.dizipen;
 
+import android.content.ContentResolver;
 import android.content.Context;
+import android.database.ContentObserver;
 import android.hardware.input.InputManager;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemProperties;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.InputDevice;
 
@@ -15,6 +20,10 @@ import android.view.InputDevice;
  * Tracks whether the Redmi Smart Pen is connected over Bluetooth and reports
  * transitions to the touch IC through vendor.pen.state (see init.dizi.rc).
  * The kernel counts connects, so only real transitions are reported.
+ *
+ * XiaomiParts' "Always enable pen input" switch is stored in Settings.Secure,
+ * because only system_app (this app), not devicesettings_app (XiaomiParts),
+ * may set persist.vendor.pen.force. It is copied to the property here.
  */
 public final class PenMonitor implements InputManager.InputDeviceListener {
 
@@ -26,22 +35,42 @@ public final class PenMonitor implements InputManager.InputDeviceListener {
 
     private static final String PROP_STATE = "vendor.pen.state";
     private static final String PROP_FORCE = "persist.vendor.pen.force";
+    // Keep in sync with XiaomiParts PenSettingsFragment.
+    private static final String SETTING_FORCE = "dizi_pen_force";
 
+    private final ContentResolver mResolver;
     private final InputManager mInputManager;
     private final PenPairer mPairer;
     private boolean mConnected;
 
     PenMonitor(Context context, PenPairer pairer) {
+        mResolver = context.getContentResolver();
         mInputManager = context.getSystemService(InputManager.class);
         mPairer = pairer;
     }
 
     void start() {
+        mResolver.registerContentObserver(Settings.Secure.getUriFor(SETTING_FORCE), false,
+                new ContentObserver(new Handler(Looper.getMainLooper())) {
+                    @Override
+                    public void onChange(boolean selfChange) {
+                        applyForceSetting();
+                    }
+                });
+        applyForceSetting();
         mInputManager.registerInputDeviceListener(this, null);
         // Re-evaluate when persist.vendor.pen.force is toggled (e.g. via adb).
         SystemProperties.addChangeCallback(this::refresh);
         refresh();
         mPairer.setPenConnected(mConnected);
+    }
+
+    private void applyForceSetting() {
+        // Unset: leave the property alone (it may have been set via adb).
+        int force = Settings.Secure.getInt(mResolver, SETTING_FORCE, -1);
+        if (force >= 0) {
+            SystemProperties.set(PROP_FORCE, force != 0 ? "true" : "false");
+        }
     }
 
     private boolean isPen(int deviceId) {
