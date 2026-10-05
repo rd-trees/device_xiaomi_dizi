@@ -1,0 +1,4 @@
+# POCO Smart Pen (Bluetooth HID "POCO Smart Pen Keyboard"), same buttons as the Redmi pen.
+# The two barrel buttons report KEY_PAGEUP / KEY_PAGEDOWN.
+key 104   STYLUS_BUTTON_PRIMARY
+key 109   STYLUS_BUTTON_SECONDARY

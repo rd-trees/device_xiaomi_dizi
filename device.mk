@@ -212,6 +212,7 @@ PRODUCT_PACKAGES += \
 # Keylayout
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/keylayout/Vendor_0022_Product_4e83.kl:$(TARGET_COPY_OUT_VENDOR)/usr/keylayout/Vendor_0022_Product_4e83.kl \
+    $(LOCAL_PATH)/configs/keylayout/Vendor_0022_Product_3283.kl:$(TARGET_COPY_OUT_VENDOR)/usr/keylayout/Vendor_0022_Product_3283.kl \
     $(LOCAL_PATH)/configs/keylayout/parrot-qrd-snd-card_Button_Jack.kl:$(TARGET_COPY_OUT_ODM)/usr/keylayout/parrot-qrd-snd-card_Button_Jack.kl
 
 # Keymint
