@@ -23,10 +23,12 @@ import android.os.ParcelUuid;
 import android.os.SystemClock;
 import android.util.Log;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
- * Pairs the Redmi Smart Pen without user interaction, as HyperOS does.
+ * Pairs the Redmi / POCO Smart Pen without user interaction, as HyperOS does.
  *
  * In pairing mode the pen advertises Xiaomi service data (UUID 0xFD2D) and its
  * name, but no LE discoverable flag, so Settings never lists it. While no pen
@@ -41,7 +43,8 @@ final class PenPairer {
 
     private static final ParcelUuid XIAOMI_SERVICE =
             ParcelUuid.fromString("0000fd2d-0000-1000-8000-00805f9b34fb");
-    private static final String PEN_NAME = "Redmi Smart Pen";
+    // Keep in sync with XiaomiParts PenSettingsFragment.
+    private static final Set<String> PEN_NAMES = Set.of("Redmi Smart Pen", "POCO Smart Pen");
 
     // A bonded pen that has advertised for pairing this long is treated as stale.
     private static final long STALE_BOND_MS = 10_000;
@@ -117,7 +120,7 @@ final class PenPairer {
     }
 
     private static boolean isPen(BluetoothDevice device) {
-        return device != null && PEN_NAME.equals(device.getName());
+        return device != null && PEN_NAMES.contains(device.getName());
     }
 
     private void update() {
@@ -130,14 +133,17 @@ final class PenPairer {
             return;
         }
         if (scan) {
-            ScanFilter filter = new ScanFilter.Builder()
-                    .setServiceData(XIAOMI_SERVICE, new byte[0], new byte[0])
-                    .setDeviceName(PEN_NAME)
-                    .build();
+            List<ScanFilter> filters = new ArrayList<>();
+            for (String name : PEN_NAMES) {
+                filters.add(new ScanFilter.Builder()
+                        .setServiceData(XIAOMI_SERVICE, new byte[0], new byte[0])
+                        .setDeviceName(name)
+                        .build());
+            }
             ScanSettings settings = new ScanSettings.Builder()
                     .setScanMode(ScanSettings.SCAN_MODE_LOW_POWER)
                     .build();
-            scanner.startScan(List.of(filter), settings, mScanCallback);
+            scanner.startScan(filters, settings, mScanCallback);
             Log.i(TAG, "scanning for a pen to pair");
         } else {
             scanner.stopScan(mScanCallback);
