@@ -28,9 +28,10 @@ import org.lineageos.settings.R;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
- * Redmi Smart Pen settings: status and battery, button actions (applied by
+ * Redmi / POCO Smart Pen settings: status and battery, button actions (applied by
  * DiziPen's KeyHandler in system_server), always-on pen input and forgetting
  * the pen (DiziPen re-pairs it automatically when its buttons are held).
  */
@@ -46,7 +47,8 @@ public class PenSettingsFragment extends PreferenceFragment implements
     // Keep in sync with DiziPen PenMonitor, which copies it to PROP_FORCE:
     // devicesettings_app may read the property but not set it.
     private static final String SETTING_FORCE = "dizi_pen_force";
-    private static final String PEN_NAME = "Redmi Smart Pen";
+    // Keep in sync with DiziPen PenPairer.
+    private static final Set<String> PEN_NAMES = Set.of("Redmi Smart Pen", "POCO Smart Pen");
 
     private static final String PREF_STATUS = "pen_status";
     private static final String PREF_FORGET = "pen_forget";
@@ -156,7 +158,7 @@ public class PenSettingsFragment extends PreferenceFragment implements
             return null;
         }
         for (BluetoothDevice device : mAdapter.getBondedDevices()) {
-            if (PEN_NAME.equals(device.getName())) {
+            if (PEN_NAMES.contains(device.getName())) {
                 return device;
             }
         }

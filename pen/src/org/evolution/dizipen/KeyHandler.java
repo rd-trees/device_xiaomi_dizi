@@ -21,13 +21,15 @@ import android.view.KeyEvent;
 
 import com.android.internal.os.DeviceKeyHandler;
 
+import java.util.Set;
+
 /**
- * Remaps the Redmi Smart Pen buttons. Loaded into system_server by
+ * Remaps the Redmi / POCO Smart Pen buttons. Loaded into system_server by
  * PhoneWindowManager (config_deviceKeyHandlerLibs/Classes), so it must stay
  * small and never throw. The pen's "Keyboard" HID device sends KEY_PAGEUP (upper
- * button) and KEY_PAGEDOWN (lower); the stock key layout Vendor_0022_Product_4e83.kl
- * maps them to KEYCODE_STYLUS_BUTTON_PRIMARY / _SECONDARY. Both forms are handled,
- * only on that device.
+ * button) and KEY_PAGEDOWN (lower); our key layouts Vendor_0022_Product_{4e83,3283}.kl
+ * map them to KEYCODE_STYLUS_BUTTON_PRIMARY / _SECONDARY. Both forms are handled,
+ * only on those devices.
  * Actions are chosen in XiaomiParts and stored in Settings.Secure.
  */
 public class KeyHandler implements DeviceKeyHandler {
@@ -41,7 +43,8 @@ public class KeyHandler implements DeviceKeyHandler {
     public static final String KEY_APP_DOWN = "dizi_pen_button_down_app";
 
     private static final int PEN_VENDOR_ID = 0x0022;
-    private static final int PEN_PRODUCT_ID = 0x4e83;
+    // Redmi Smart Pen, POCO Smart Pen. Keep in sync with PenMonitor.
+    private static final Set<Integer> PEN_PRODUCT_IDS = Set.of(0x4e83, 0x3283);
 
     private final Context mContext;
     private final Handler mHandler = new Handler(Looper.getMainLooper());
@@ -68,7 +71,7 @@ public class KeyHandler implements DeviceKeyHandler {
         }
         InputDevice device = InputDevice.getDevice(event.getDeviceId());
         if (device == null || device.getVendorId() != PEN_VENDOR_ID
-                || device.getProductId() != PEN_PRODUCT_ID) {
+                || !PEN_PRODUCT_IDS.contains(device.getProductId())) {
             return event;
         }
         ContentResolver cr = mContext.getContentResolver();

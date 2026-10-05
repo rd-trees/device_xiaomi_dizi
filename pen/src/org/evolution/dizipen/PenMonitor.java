@@ -16,8 +16,10 @@ import android.provider.Settings;
 import android.util.Log;
 import android.view.InputDevice;
 
+import java.util.Set;
+
 /**
- * Tracks whether the Redmi Smart Pen is connected over Bluetooth and reports
+ * Tracks whether a Redmi / POCO Smart Pen is connected over Bluetooth and reports
  * transitions to the touch IC through vendor.pen.state (see init.dizi.rc).
  * The kernel counts connects, so only real transitions are reported.
  *
@@ -29,9 +31,10 @@ public final class PenMonitor implements InputManager.InputDeviceListener {
 
     private static final String TAG = "DiziPen";
 
-    // Redmi Smart Pen (M80P) Bluetooth HID identifiers.
+    // Bluetooth HID identifiers (PnP ID): Redmi Smart Pen (M80P) 0x4e83,
+    // POCO Smart Pen (N83C) 0x3283. Keep in sync with KeyHandler.
     private static final int PEN_VENDOR_ID = 0x0022;
-    private static final int PEN_PRODUCT_ID = 0x4e83;
+    private static final Set<Integer> PEN_PRODUCT_IDS = Set.of(0x4e83, 0x3283);
 
     private static final String PROP_STATE = "vendor.pen.state";
     private static final String PROP_FORCE = "persist.vendor.pen.force";
@@ -77,7 +80,7 @@ public final class PenMonitor implements InputManager.InputDeviceListener {
         InputDevice device = mInputManager.getInputDevice(deviceId);
         return device != null && device.isExternal()
                 && device.getVendorId() == PEN_VENDOR_ID
-                && device.getProductId() == PEN_PRODUCT_ID;
+                && PEN_PRODUCT_IDS.contains(device.getProductId());
     }
 
     private synchronized void refresh() {
