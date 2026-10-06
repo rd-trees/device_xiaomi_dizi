@@ -149,7 +149,8 @@ private constructor(
         BENCHMARK(0, "20", "thermal.benchmark=", R.string.thermal_benchmark),
         BROWSER(1, "11", "thermal.browser=", R.string.thermal_browser),
         CAMERA(2, "12", "thermal.camera=", R.string.thermal_camera),
-        DIALER(3, "8", "thermal.dialer=", R.string.thermal_dialer),
+        // 8 is thermal-phone.conf, which dizi does not ship; use thermal-normal.conf.
+        DIALER(3, "0", "thermal.dialer=", R.string.thermal_dialer),
         GAMING(4, "13", "thermal.gaming=", R.string.thermal_gaming),
         NAVIGATION(5, "19", "thermal.navigation=", R.string.thermal_navigation),
         VIDEOCALL(6, "4", "thermal.streaming=", R.string.thermal_streaming),
