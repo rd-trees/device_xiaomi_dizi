@@ -1,4 +1,8 @@
 on boot
+    # The audio HAL (PAL) logs every stream user-count change at debug level, thousands of
+    # lines a second during playback, which flushes logcat's main buffer within seconds.
+    setprop log.tag.PAL I
+
     # Touchscreen / stylus (NT36532 + xiaomi_touch)
     chown system system /dev/xiaomi-touch
     chmod 0660 /dev/xiaomi-touch
