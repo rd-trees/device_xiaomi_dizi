@@ -11,7 +11,10 @@ android_app {
     platform_apis: true,
     privileged: true,
     system_ext_specific: true,
-    required: ["xiaomi-pen"],
+    required: [
+        "xiaomi-pen",
+        "xiaomi-pen-pressure",
+    ],
 
     optimize: {
         proguard_flags_files: ["proguard.flags"],
@@ -22,5 +25,12 @@ cc_binary {
     name: "xiaomi-pen",
     vendor: true,
     srcs: ["xiaomi-pen.cpp"],
+    shared_libs: ["libbase"],
+}
+
+cc_binary {
+    name: "xiaomi-pen-pressure",
+    vendor: true,
+    srcs: ["xiaomi-pen-pressure.cpp"],
     shared_libs: ["libbase"],
 }
