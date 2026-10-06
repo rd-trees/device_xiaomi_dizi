@@ -37,6 +37,20 @@ on property:vendor.post_boot.parsed=1
     write /proc/sys/walt/walt_low_latency_task_threshold 100
     write /proc/sys/walt/sched_coloc_busy_hysteresis_enable_cpus 112
 
+# The display composer runs HWC validate on SurfaceFlinger's critical path. Its stock rc puts it in
+# system-background (CPUs 0-3), and the perf hint that would move it to the big cores during
+# GPU-composed frames needs QTI perfd, which we don't ship. Put it in the foreground cpuset above.
+service vendor.qti.hardware.display.composer /vendor/bin/hw/vendor.qti.hardware.display.composer-service
+    override
+    class hal animation
+    user system
+    group graphics drmrpc
+    capabilities SYS_NICE
+    onrestart restart surfaceflinger
+    onrestart restart feature_enabler_client
+    socket pps stream 0660 system system
+    task_profiles ProcessCapacityHigh
+
 service vendor.audio-hal /vendor/bin/hw/android.hardware.audio.service
     override
     class hal
