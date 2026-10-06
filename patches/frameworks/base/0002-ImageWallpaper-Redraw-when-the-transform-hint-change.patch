@@ -1,0 +1,110 @@
+From 35f4ec6faa26ccfba4ba00cbb4bc78a1438f81cf Mon Sep 17 00:00:00 2001
+From: Alexander Gurov <aliogu23@gmail.com>
+Date: Tue, 6 Oct 2026 15:11:53 +0300
+Subject: [PATCH 2/2] ImageWallpaper: Redraw when the transform hint changes
+
+The wallpaper surface has the bitmap's fixed size, so a rotation doesn't
+resize it, only changes its transform hint, and the frame stayed drawn
+for the old orientation. SurfaceFlinger then rotates it on the GPU for
+every frame that shows the wallpaper, because display hardware without
+a rotator can't. Record the hint each frame was drawn with and redraw
+when it differs, also 500 ms after a display change.
+
+After a restart or at boot the first frame can be drawn before the
+BLAST queue has the display's hint, so redraw 1, 5 and 15 s after the
+surface is created.
+
+Claude-Session: https://claude.ai/code/session_01HCu2kUrLkzjzZJEZ6mCKqM
+---
+ .../systemui/wallpapers/ImageWallpaper.java   | 36 ++++++++++++++++++-
+ 1 file changed, 35 insertions(+), 1 deletion(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/wallpapers/ImageWallpaper.java b/packages/SystemUI/src/com/android/systemui/wallpapers/ImageWallpaper.java
+index e344b7de6d22..75ff7798130c 100644
+--- a/packages/SystemUI/src/com/android/systemui/wallpapers/ImageWallpaper.java
++++ b/packages/SystemUI/src/com/android/systemui/wallpapers/ImageWallpaper.java
+@@ -40,6 +40,7 @@ import android.os.Trace;
+ import android.service.wallpaper.WallpaperService;
+ import android.util.Log;
+ import android.view.Surface;
++import android.view.SurfaceControl;
+ import android.view.SurfaceHolder;
+ 
+ import androidx.annotation.NonNull;
+@@ -122,6 +123,8 @@ public class ImageWallpaper extends WallpaperService {
+         private Runnable mPendingDimUpdate;
+         private SurfaceHolder mSurfaceHolder;
+         private boolean mDrawn = false;
++        // The transform hint the current frame was drawn with (-1: none yet).
++        private int mDrawnTransformHint = -1;
+         @VisibleForTesting
+         static final int MIN_SURFACE_WIDTH = 128;
+         @VisibleForTesting
+@@ -254,6 +257,22 @@ public class ImageWallpaper extends WallpaperService {
+             if (DEBUG) {
+                 Log.i(TAG, "onSurfaceCreated");
+             }
++            // After a restart the first frame can be drawn before the BLAST queue has the
++            // display's transform hint (the SurfaceControl already reports it, so the hint check
++            // in drawFrameSynchronized can't tell). That frame isn't pre-rotated and SurfaceFlinger
++            // rotates it on the GPU for good. Draw again once the hint has settled; at boot that
++            // can take several seconds, so try a few times (a redraw costs one bitmap draw).
++            for (long delayMs : new long[] {1000, 5000, 15000}) {
++                mLongExecutor.executeDelayed(this::redrawSynchronized, delayMs);
++            }
++        }
++
++        private void redrawSynchronized() {
++            synchronized (mLock) {
++                // Not drawn yet: that first draw will use the settled hint.
++                if (!mDrawn) return;
++                drawFrameInternal();
++            }
+         }
+ 
+         @Override
+@@ -270,11 +289,20 @@ public class ImageWallpaper extends WallpaperService {
+ 
+         private void drawFrameSynchronized() {
+             synchronized (mLock) {
+-                if (mDrawn) return;
++                // The surface has the bitmap's fixed size, so a display rotation doesn't resize it,
++                // only changes its transform hint. Redraw then: HWUI pre-rotates to the new hint.
++                // Otherwise SurfaceFlinger rotates the old frame, which display hardware without a
++                // rotator can't do, so every frame showing the wallpaper is composed on the GPU.
++                if (mDrawn && mDrawnTransformHint == getTransformHint()) return;
+                 drawFrameInternal();
+             }
+         }
+ 
++        private int getTransformHint() {
++            SurfaceControl sc = getRenderingSurfaceControl();
++            return sc != null && sc.isValid() ? sc.getTransformHint() : -1;
++        }
++
+         private void drawFrameInternal() {
+             // load the wallpaper if not already done
+             if (!isBitmapLoaded()) {
+@@ -419,6 +447,7 @@ public class ImageWallpaper extends WallpaperService {
+ 
+                     canvas.drawBitmap(processedBitmap, null, dest, null);
+                     mDrawn = true;
++                    mDrawnTransformHint = getTransformHint();
+                 } finally {
+                     if (processedBitmap != null
+                             && processedBitmap != bitmap
+@@ -690,6 +719,11 @@ public class ImageWallpaper extends WallpaperService {
+                 // the new display dimensions will be used in the next color computation
+                 if (displayId == getDisplayContext().getDisplayId()) {
+                     getDisplaySizeAndUpdateColorExtractor();
++                    // A rotation normally comes with onSurfaceRedrawNeeded, but not always (e.g.
++                    // right after boot, the hint can change after the first frame). Re-check once
++                    // the relayout has updated the transform hint; drawFrameSynchronized only
++                    // redraws if the hint differs from the one the frame was drawn with.
++                    mLongExecutor.executeDelayed(this::drawFrameSynchronized, 500);
+                 }
+             } finally {
+                 Trace.endSection();
+-- 
+2.47.3
+

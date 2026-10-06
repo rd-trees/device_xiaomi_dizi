@@ -1,0 +1,106 @@
+From f89a05034769295306eeb8f645f671b618e5886e Mon Sep 17 00:00:00 2001
+From: Alexander Gurov <aliogu23@gmail.com>
+Date: Tue, 6 Oct 2026 15:11:52 +0300
+Subject: [PATCH 2/3] CompositionEngine: Mark SystemUI's screen decoration as
+ an RC mask
+
+Qualcomm's display engine can draw the rounded screen corners itself
+(the DSPP RC block), leaving the source pipes to real layers, but only
+for layers marked through the vendor IDisplayConfig service. CLO's
+SurfaceFlinger does that, AOSP's doesn't. On SM7435, with three source
+pipes, the two corner overlays otherwise push transition frames into
+GPU composition.
+
+With ro.sf.screen_decor_mask set, call IDisplayConfig.setLayerAsMask
+for the ScreenDecorHwcOverlay layer when its HWC layer is created on
+the primary display. The call is a raw binder transaction (the 28th
+method; stable AIDL only appends), so no QTI interface library is
+needed.
+
+Claude-Session: https://claude.ai/code/session_01HCu2kUrLkzjzZJEZ6mCKqM
+---
+ .../CompositionEngine/Android.bp              |  1 +
+ .../CompositionEngine/src/Display.cpp         | 40 +++++++++++++++++++
+ 2 files changed, 41 insertions(+)
+
+diff --git a/services/surfaceflinger/CompositionEngine/Android.bp b/services/surfaceflinger/CompositionEngine/Android.bp
+index 741a03db3e..a0c05af631 100644
+--- a/services/surfaceflinger/CompositionEngine/Android.bp
++++ b/services/surfaceflinger/CompositionEngine/Android.bp
+@@ -29,6 +29,7 @@ cc_defaults {
+         "android.hardware.graphics.composer@2.3",
+         "android.hardware.graphics.composer@2.4",
+         "libbase",
++        "libbinder",
+         "libcutils",
+         "libgui",
+         "liblog",
+diff --git a/services/surfaceflinger/CompositionEngine/src/Display.cpp b/services/surfaceflinger/CompositionEngine/src/Display.cpp
+index 6068e72edb..7ae85aae69 100644
+--- a/services/surfaceflinger/CompositionEngine/src/Display.cpp
++++ b/services/surfaceflinger/CompositionEngine/src/Display.cpp
+@@ -14,7 +14,11 @@
+  * limitations under the License.
+  */
+ 
++#include <android-base/properties.h>
+ #include <android-base/stringprintf.h>
++#include <binder/IServiceManager.h>
++#include <binder/Parcel.h>
++#include <cinttypes>
+ #include <common/trace.h>
+ #include <compositionengine/CompositionEngine.h>
+ #include <compositionengine/CompositionRefreshArgs.h>
+@@ -44,6 +48,38 @@ using aidl::android::hardware::graphics::composer3::DisplayCapability;
+ 
+ namespace android::compositionengine::impl {
+ 
++namespace {
++
++// Qualcomm's display engine can draw the rounded screen corners itself (the DSPP RC block),
++// leaving the source pipes to real layers, but only for layers marked through the vendor
++// DisplayConfig service; CLO SurfaceFlinger does that, AOSP doesn't. With 3 pipes (SM7435), the
++// two corner overlays otherwise push transition frames into GPU composition. With
++// ro.sf.screen_decor_mask set, mark SystemUI's screen decoration layer on the primary display.
++void markScreenDecorAsMask(const char* name, HWC2::Layer& hwcLayer) {
++    static const bool enabled = base::GetBoolProperty("ro.sf.screen_decor_mask", false);
++    if (!enabled || !name || !strstr(name, "ScreenDecorHwcOverlay")) return;
++
++    const sp<IBinder> binder = defaultServiceManager()->checkService(
++            String16("vendor.qti.hardware.display.config.IDisplayConfig/default"));
++    if (!binder) {
++        ALOGW("%s: no DisplayConfig service", __func__);
++        return;
++    }
++    // IDisplayConfig.setLayerAsMask(int dispId, long layerId) is its 28th method. Stable AIDL
++    // only appends methods, so the code is the same in every version that has it.
++    constexpr uint32_t kSetLayerAsMask = IBinder::FIRST_CALL_TRANSACTION + 27;
++    Parcel data, reply;
++    data.markForBinder(binder);
++    data.writeInterfaceToken(String16("vendor.qti.hardware.display.config.IDisplayConfig"));
++    data.writeInt32(0); // the primary built-in display
++    data.writeInt64(static_cast<int64_t>(hwcLayer.getId()));
++    status_t err = binder->transact(kSetLayerAsMask, data, &reply);
++    if (err == OK) err = reply.readExceptionCode();
++    ALOGI("%s: %s (HWC layer %" PRIu64 "): %d", __func__, name, hwcLayer.getId(), err);
++}
++
++} // namespace
++
+ std::shared_ptr<Display> createDisplay(
+         const compositionengine::CompositionEngine& compositionEngine,
+         const compositionengine::DisplayCreationArgs& args) {
+@@ -175,6 +211,10 @@ std::unique_ptr<compositionengine::OutputLayer> Display::createOutputLayer(
+         auto hwcLayer = hwc.createLayer(*halDisplayId);
+         ALOGE_IF(!hwcLayer, "Failed to create a HWC layer for a HWC supported display %s",
+                  getName().c_str());
++        if (hwcLayer && !hwc.isHeadless() &&
++            halDisplayId->value == hwc.getPrimaryDisplayId().value) {
++            markScreenDecorAsMask(layerFE->getDebugName(), *hwcLayer);
++        }
+         outputLayer->setHwcLayer(std::move(hwcLayer));
+     }
+     return outputLayer;
+-- 
+2.47.3
+

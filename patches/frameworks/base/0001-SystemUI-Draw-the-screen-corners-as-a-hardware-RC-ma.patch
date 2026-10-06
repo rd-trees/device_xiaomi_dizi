@@ -1,0 +1,282 @@
+From 85124fe5b50e21a1845e737added0a11ac9f6bb3 Mon Sep 17 00:00:00 2001
+From: Alexander Gurov <aliogu23@gmail.com>
+Date: Tue, 6 Oct 2026 15:11:53 +0300
+Subject: [PATCH 1/2] SystemUI: Draw the screen corners as a hardware RC mask
+
+With ro.sf.screen_decor_mask, report a synthetic RGBA_8888 MASK display
+decoration support, so ScreenDecorHwcLayer draws the corners for the
+display engine's rounded-corner block, which SurfaceFlinger marks
+through IDisplayConfig.
+
+The RC block takes a linear, untransformed, top-most mask, and software
+rendering isn't pre-rotated, so a landscape mask was rejected. Draw it
+on the CPU into an ImageReader (CPU_WRITE | COMPOSER_OVERLAY |
+GPU_SAMPLED, linear) child surface in the display's native orientation,
+with the inverse buffer transform of the window's hint. The window
+itself stays empty and transparent, so SurfaceFlinger culls it.
+
+Claude-Session: https://claude.ai/code/session_01HCu2kUrLkzjzZJEZ6mCKqM
+---
+ .../android/systemui/ScreenDecorHwcLayer.kt   | 132 +++++++++++++++++-
+ .../android/systemui/ScreenDecorations.java   |  24 +++-
+ 2 files changed, 150 insertions(+), 6 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/ScreenDecorHwcLayer.kt b/packages/SystemUI/src/com/android/systemui/ScreenDecorHwcLayer.kt
+index c46558532372..ebb909813654 100644
+--- a/packages/SystemUI/src/com/android/systemui/ScreenDecorHwcLayer.kt
++++ b/packages/SystemUI/src/com/android/systemui/ScreenDecorHwcLayer.kt
+@@ -29,8 +29,10 @@ import android.graphics.PorterDuffXfermode
+ import android.graphics.Rect
+ import android.graphics.Region
+ import android.graphics.drawable.Drawable
++import android.hardware.HardwareBuffer
+ import android.hardware.graphics.common.AlphaInterpretation
+ import android.hardware.graphics.common.DisplayDecorationSupport
++import android.media.ImageReader
+ import android.view.DisplayCutout.BOUNDS_POSITION_BOTTOM
+ import android.view.DisplayCutout.BOUNDS_POSITION_LEFT
+ import android.view.DisplayCutout.BOUNDS_POSITION_LENGTH
+@@ -39,6 +41,8 @@ import android.view.DisplayCutout.BOUNDS_POSITION_RIGHT
+ import android.view.RoundedCorner
+ import android.view.RoundedCorners
+ import android.view.Surface
++import android.view.SurfaceControl
++import android.view.View
+ import androidx.annotation.VisibleForTesting
+ import com.android.systemui.util.asIndenting
+ import java.io.PrintWriter
+@@ -56,6 +60,10 @@ class ScreenDecorHwcLayer(
+ ) : DisplayCutoutBaseView(context) {
+     val colorMode: Int
+     private val useInvertedAlphaColor: Boolean
++    // RGBA_8888: an ordinary layer that SurfaceFlinger marks as a mask for Qualcomm's RC block
++    // (see ScreenDecorations#getDisplayDecorationSupport), not a DISPLAY_DECORATION layer.
++    private val isRcMask = displayDecorationSupport.format == PixelFormat.RGBA_8888
++    private val rcMask: RcMaskSurface? = if (isRcMask && !debug) RcMaskSurface() else null
+     private var color: Int = Color.BLACK
+         set(value) {
+             field = value
+@@ -78,7 +86,7 @@ class ScreenDecorHwcLayer(
+     private var roundedCornerDrawableBottom: Drawable? = null
+ 
+     init {
+-        if (displayDecorationSupport.format != PixelFormat.R_8) {
++        if (displayDecorationSupport.format != PixelFormat.R_8 && !isRcMask) {
+             throw IllegalArgumentException("Attempting to use unsupported mode " +
+                     "${PixelFormat.formatToString(displayDecorationSupport.format)}")
+         }
+@@ -92,7 +100,7 @@ class ScreenDecorHwcLayer(
+                 style = Paint.Style.FILL
+             }
+         } else {
+-            colorMode = ActivityInfo.COLOR_MODE_A8
++            colorMode = if (isRcMask) ActivityInfo.COLOR_MODE_DEFAULT else ActivityInfo.COLOR_MODE_A8
+             useInvertedAlphaColor = displayDecorationSupport.alphaInterpretation ==
+                     AlphaInterpretation.COVERAGE
+             if (useInvertedAlphaColor) {
+@@ -118,7 +126,7 @@ class ScreenDecorHwcLayer(
+     }
+ 
+     private fun updateColors() {
+-        if (!debug) {
++        if (!debug && !isRcMask) {
+             viewRootImpl.setDisplayDecoration(true)
+         }
+ 
+@@ -151,7 +159,17 @@ class ScreenDecorHwcLayer(
+         parent.requestTransparentRegion(this)
+     }
+ 
++    override fun onDetachedFromWindow() {
++        rcMask?.release()
++        super.onDetachedFromWindow()
++    }
++
+     override fun onDraw(canvas: Canvas) {
++        if (rcMask != null) {
++            // The window itself stays empty (and, with the transparent region, off the display).
++            rcMask.post(this) { drawMaskContent(it) }
++            return
++        }
+         // If updating onDraw, also update gatherTransparentRegion
+         if (useInvertedAlphaColor) {
+             canvas.drawColor(bgColor)
+@@ -169,7 +187,16 @@ class ScreenDecorHwcLayer(
+         }
+     }
+ 
++    private fun drawMaskContent(canvas: Canvas) {
++        drawRoundedCorners(canvas)
++        super.onDraw(canvas)
++    }
++
+     override fun gatherTransparentRegion(region: Region?): Boolean {
++        if (rcMask != null) {
++            // Nothing is drawn into the window: leave all of it transparent.
++            return false
++        }
+         region?.let {
+             calculateTransparentRect()
+             if (debug) {
+@@ -451,3 +478,102 @@ class ScreenDecorHwcLayer(
+         ipw.decreaseIndent()
+     }
+ }
++
++/**
++ * The screen decoration for Qualcomm's rounded-corner (RC) block: SurfaceFlinger marks this layer
++ * as a mask (ro.sf.screen_decor_mask), and SDM then draws the corners in the display engine instead
++ * of spending a source pipe on them. SDM takes only linear, untransformed masks: GPU-rendered
++ * buffers are compressed (UBWC), and a software-rendered window isn't pre-rotated. So draw on the
++ * CPU (linear) into a buffer in the panel's natural orientation, rotated like HWUI pre-rotation,
++ * and put the inverse in the buffer transform, on a child surface of the decoration window.
++ */
++private class RcMaskSurface {
++    private var surfaceControl: SurfaceControl? = null
++    private var parent: SurfaceControl? = null
++    private var reader: ImageReader? = null
++
++    fun post(view: View, draw: (Canvas) -> Unit) {
++        val parentSc = view.viewRootImpl?.surfaceControl ?: return
++        if (!parentSc.isValid || view.width == 0 || view.height == 0) return
++        val w = view.width
++        val h = view.height
++        val hint = parentSc.transformHint
++        val rotated = (hint and SurfaceControl.BUFFER_TRANSFORM_ROTATE_90) != 0
++        val bufferWidth = if (rotated) h else w
++        val bufferHeight = if (rotated) w else h
++
++        val r = reader?.takeIf { it.width == bufferWidth && it.height == bufferHeight }
++            ?: newReader(bufferWidth, bufferHeight)
++        val canvas = r.surface.lockCanvas(null)
++        try {
++            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
++            // The same pre-rotation as HWUI's GetPreTransformMatrix for this hint.
++            when (hint) {
++                SurfaceControl.BUFFER_TRANSFORM_ROTATE_90 -> {
++                    canvas.translate(h.toFloat(), 0f)
++                    canvas.rotate(90f)
++                }
++                SurfaceControl.BUFFER_TRANSFORM_ROTATE_180 -> {
++                    canvas.translate(w.toFloat(), h.toFloat())
++                    canvas.rotate(180f)
++                }
++                SurfaceControl.BUFFER_TRANSFORM_ROTATE_270 -> {
++                    canvas.translate(0f, w.toFloat())
++                    canvas.rotate(270f)
++                }
++            }
++            draw(canvas)
++        } finally {
++            r.surface.unlockCanvasAndPost(canvas)
++        }
++        val image = r.acquireLatestImage() ?: return
++        val buffer = image.hardwareBuffer
++        if (buffer == null) {
++            image.close()
++            return
++        }
++
++        val t = SurfaceControl.Transaction()
++        val sc = surfaceControl ?: SurfaceControl.Builder()
++            .setName("ScreenDecorHwcOverlay RC mask")
++            .setParent(parentSc)
++            .setCallsite("ScreenDecorHwcLayer.RcMaskSurface")
++            .build()
++            .also { surfaceControl = it }
++        if (parent != parentSc) {
++            t.reparent(sc, parentSc)
++            parent = parentSc
++        }
++        t.setBuffer(sc, buffer, null) { image.close() }
++            .setBufferTransform(sc, invert(hint))
++            .setLayer(sc, 1)
++            .show(sc)
++            .apply()
++        buffer.close()
++    }
++
++    fun release() {
++        surfaceControl?.let { SurfaceControl.Transaction().remove(it).apply() }
++        surfaceControl = null
++        parent = null
++        reader?.close()
++        reader = null
++    }
++
++    private fun newReader(width: Int, height: Int): ImageReader {
++        reader?.close()
++        // CPU usage keeps gralloc from compressing it; GPU sampling lets SurfaceFlinger fall back
++        // to client composition if SDM declines the mask.
++        return ImageReader.newInstance(
++            width, height, PixelFormat.RGBA_8888, 3,
++            HardwareBuffer.USAGE_CPU_WRITE_OFTEN or HardwareBuffer.USAGE_CPU_READ_RARELY or
++                HardwareBuffer.USAGE_COMPOSER_OVERLAY or HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE
++        ).also { reader = it }
++    }
++
++    private fun invert(transform: Int): Int = when (transform) {
++        SurfaceControl.BUFFER_TRANSFORM_ROTATE_90 -> SurfaceControl.BUFFER_TRANSFORM_ROTATE_270
++        SurfaceControl.BUFFER_TRANSFORM_ROTATE_270 -> SurfaceControl.BUFFER_TRANSFORM_ROTATE_90
++        else -> transform
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/ScreenDecorations.java b/packages/SystemUI/src/com/android/systemui/ScreenDecorations.java
+index 9fff3fd07534..71f1d0f0a067 100644
+--- a/packages/SystemUI/src/com/android/systemui/ScreenDecorations.java
++++ b/packages/SystemUI/src/com/android/systemui/ScreenDecorations.java
+@@ -510,7 +510,7 @@ public class ScreenDecorations implements
+         mDebugRoundedCornerFactory =
+                 new RoundedCornerDecorProviderFactory(mDebugRoundedCornerDelegate);
+         mCutoutFactory = getCutoutFactory();
+-        mHwcScreenDecorationSupport = mContext.getDisplay().getDisplayDecorationSupport();
++        mHwcScreenDecorationSupport = getDisplayDecorationSupport();
+         updateHwLayerRoundedCornerDrawable();
+         setupDecorations();
+         setupCameraListener();
+@@ -568,7 +568,7 @@ public class ScreenDecorations implements
+                 if (!Objects.equals(newUniqueId, mDisplayUniqueId)) {
+                     mDisplayUniqueId = newUniqueId;
+                     final DisplayDecorationSupport newScreenDecorationSupport =
+-                            mContext.getDisplay().getDisplayDecorationSupport();
++                            getDisplayDecorationSupport();
+ 
+                     mRoundedCornerResDelegate.updateDisplayUniqueId(newUniqueId, null);
+ 
+@@ -864,6 +864,24 @@ public class ScreenDecorations implements
+         mScreenDecorHwcLayer = null;
+     }
+ 
++    /**
++     * The composer's display decoration support. A HIDL composer has no decoration API, but
++     * Qualcomm's can still draw the corners with the display engine's RC block for layers that
++     * SurfaceFlinger marks as masks (ro.sf.screen_decor_mask). Use the decoration layer then, as
++     * RGBA_8888 (see ScreenDecorHwcLayer's RcMaskSurface): the corners move out of the overlay
++     * windows, which keep only the privacy dots and show up only with them.
++     */
++    private DisplayDecorationSupport getDisplayDecorationSupport() {
++        DisplayDecorationSupport support = mContext.getDisplay().getDisplayDecorationSupport();
++        if (support == null && mContext.getDisplayId() == Display.DEFAULT_DISPLAY
++                && SystemProperties.getBoolean("ro.sf.screen_decor_mask", false)) {
++            support = new DisplayDecorationSupport();
++            support.format = PixelFormat.RGBA_8888;
++            support.alphaInterpretation = AlphaInterpretation.MASK;
++        }
++        return support;
++    }
++
+     private void createHwcOverlay() {
+         if (mScreenDecorHwcWindow != null) {
+             return;
+@@ -923,7 +941,7 @@ public class ScreenDecorations implements
+             lp.setFrameRatePowerSavingsBalanced(false);
+         }
+         lp.gravity = Gravity.TOP | Gravity.START;
+-        if (!mDebug) {
++        if (!mDebug && mHwcScreenDecorationSupport.format == PixelFormat.R_8) {
+             lp.setColorMode(ActivityInfo.COLOR_MODE_A8);
+         }
+         return lp;
+-- 
+2.47.3
+
