@@ -1,3 +1,4 @@
 get_prop(vendor_init, vendor_pen_prop)
 allow vendor_init vendor_sysfs_ufs_queue:file w_file_perms;
 allow vendor_init vendor_sysfs_ufs_clkgate:file w_file_perms;
+allow vendor_init proc_walt:file w_file_perms;
