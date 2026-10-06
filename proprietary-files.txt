@@ -905,24 +905,30 @@ vendor/lib/libllvm-glnext.so
 vendor/lib/libllvm-qcom.so
 vendor/lib/libllvm-qgl.so
 vendor/lib/libOpenCL.so
-vendor/lib64/egl/eglSubDriverAndroid.so
-vendor/lib64/egl/libEGL_adreno.so;SYMLINK=vendor/lib64/libEGL_adreno.so
-vendor/lib64/egl/libGLESv1_CM_adreno.so
-vendor/lib64/egl/libGLESv2_adreno.so;SYMLINK=vendor/lib64/libGLESv2_adreno.so
-vendor/lib64/egl/libq3dtools_adreno.so;SYMLINK=vendor/lib64/libq3dtools_adreno.so
-vendor/lib64/egl/libq3dtools_esx.so
-vendor/lib64/egl/libVkLayer_ADRENO_qprofiler.so
-vendor/lib64/libadreno_app_profiles.so
-vendor/lib64/libadreno_utils.so
-vendor/lib64/libCB.so
-vendor/lib64/libgpudataproducer.so
-vendor/lib64/libgsl.so
-vendor/lib64/libkcl.so
-vendor/lib64/libkernelmanager.so
-vendor/lib64/libllvm-glnext.so
-vendor/lib64/libllvm-qcom.so
-vendor/lib64/libllvm-qgl.so
-vendor/lib64/libOpenCL.so
+
+# Graphics (Adreno, 64-bit) - from Matrixx-Devices/vendor_xiaomi_garnet cd03ffe (greatwhite V@0863.1)
+# V@0615.98 HWUI Vulkan corrupts software-written YV12 (Instagram Reels, dav1d); 32-bit stays stock.
+vendor/lib64/egl/eglSubDriverAndroid.so|906952a514ae3b5498b9f99df20c41c8a5986897
+vendor/lib64/egl/libEGL_adreno.so;SYMLINK=vendor/lib64/libEGL_adreno.so|05331727b6b7d52c5ae2838a5359b6abe1bd4f50
+vendor/lib64/egl/libGLESv1_CM_adreno.so|88890bf7a1d4834da40a49ee2aff374339be19c8
+vendor/lib64/egl/libGLESv2_adreno.so;SYMLINK=vendor/lib64/libGLESv2_adreno.so|e021c7729193aff30600c4aad7470a3cc26518b5
+vendor/lib64/egl/libVkLayer_ADRENO_qprofiler.so|0bd7849775ea253b0bba70a978fb1f7cf4798495
+vendor/lib64/egl/libq3dtools_adreno.so;SYMLINK=vendor/lib64/libq3dtools_adreno.so|806b150f644fa26ef8106dd494f08dd6683bf25c
+vendor/lib64/egl/libq3dtools_esx.so|04bab2127f5e24f6a1582935a2d277fc820c8e03
+vendor/lib64/hw/vulkan.adreno.so|83ae766b143a90f29b33424a020867865e539eac
+vendor/lib64/libCB.so|8a2a0ea6de7540371c9666a1078c3e7077ca258e
+vendor/lib64/libOpenCL.so|490dde4d988244af1ce1957e686fd59ed631fa2d
+vendor/lib64/libOpenCL_adreno.so|b490b02d75bdcb57165a3c0b6ec63554e71f84b2
+vendor/lib64/libadreno_app_profiles.so|6e90ca778ed0e353532773a224738be2c3e42b55
+vendor/lib64/libadreno_compiler_cl.so|0e739ed8594d47dce7a45d9176f0a5893fff70f5
+vendor/lib64/libadreno_utils.so|3aa0ba954410112a7e8cb82edc560e15666ffa7a
+vendor/lib64/libgpudataproducer.so|fc473351cc390de4d01bd43c389722be3d26ef37
+vendor/lib64/libgsl.so|1944c79feb008156f766e7da101dd78183a349ac
+vendor/lib64/libkcl.so|14adaa7dc25ff581d2b877c8a30c003dc902ef38
+vendor/lib64/libkernelmanager.so|67b2d698b4e7671ea5f733a828c551c37f9772e9
+vendor/lib64/libllvm-glnext.so|ec4e05e2667582374d2acf50acbe302209985e76
+vendor/lib64/libllvm-qcom.so|c5b21de4faa050f27d0bb2d77a575144763d8fa8
+vendor/lib64/libllvm-qgl.so|f193da53721e76dee87de828870cce4342f47b61
 
 # Graphics (Adreno firmware)
 vendor/firmware/a710_sqe.fw
@@ -933,9 +939,6 @@ vendor/firmware/a710_zap.elf
 vendor/firmware/a710_zap.mbn
 vendor/firmware/a710_zap.mdt
 vendor/firmware/gmu_gen70000.bin
-
-# Graphics (Vulkan)
-vendor/lib64/hw/vulkan.adreno.so
 
 # Hotword enrollment
 product/etc/permissions/privapp-permissions-google-audio-system.xml:product/etc/permissions/privapp-permissions-hotword.xml
