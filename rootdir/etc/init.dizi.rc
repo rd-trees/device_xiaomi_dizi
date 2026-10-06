@@ -25,6 +25,18 @@ on property:vendor.post_boot.parsed=1
     # Setup foreground cpuset for display composer.
     write /dev/cpuset/foreground/cpus 0-6
 
+    # WALT as stock's 120 Hz boost (perf hint 0x109B) leaves it: 8 ms window with predictive
+    # load, render-thread group boosting and colocation (the min task utils are in
+    # powerhint.json). Stock's floors (3 golds online, silver 806 MHz) gained nothing measurable
+    # and stay out. Recents launcher jank ~2.6 -> ~2.1 % (cnb-release-4, portrait).
+    write /proc/sys/walt/sched_ravg_window_nr_ticks 2
+    write /sys/devices/system/cpu/cpufreq/policy0/walt/pl 1
+    write /sys/devices/system/cpu/cpufreq/policy4/walt/pl 1
+    write /proc/sys/walt/walt_rtg_cfs_boost_prio 119
+    write /proc/sys/walt/sched_coloc_downmigrate_ns 100000000
+    write /proc/sys/walt/walt_low_latency_task_threshold 100
+    write /proc/sys/walt/sched_coloc_busy_hysteresis_enable_cpus 112
+
 service vendor.audio-hal /vendor/bin/hw/android.hardware.audio.service
     override
     class hal
