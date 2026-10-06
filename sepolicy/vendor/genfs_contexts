@@ -44,3 +44,6 @@ genfscon proc /last_kmsg u:object_r:vendor_proc_last_kmsg:s0
 
 # UFS LUN 0 (userdata) request queue: init.rc and init.qcom.rc set discard_max_bytes
 genfscon sysfs /devices/platform/soc/1d84000.ufshc/host0/target0:0:0/0:0:0:0/block/sda/queue/discard_max_bytes u:object_r:vendor_sysfs_ufs_queue:s0
+
+# UFS clock gating: init.qcom.rc turns it off during boot and back on afterwards
+genfscon sysfs /devices/platform/soc/1d84000.ufshc/clkgate_enable u:object_r:vendor_sysfs_ufs_clkgate:s0

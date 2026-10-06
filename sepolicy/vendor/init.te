@@ -4,3 +4,4 @@ set_prop(vendor_init, vendor_fp_prop)
 set_prop(vendor_init, vendor_qcc_prop)
 allow init vendor_proc_last_kmsg:file { getattr setattr };
 allow init vendor_sysfs_ufs_queue:file w_file_perms;
+allow init vendor_sysfs_ufs_clkgate:file w_file_perms;
