@@ -6,7 +6,7 @@ This tree started as a fork of the Evolution X garnet (Redmi Note 13 Pro 5G) tre
 ## Building
 
 1. `repo init -u https://github.com/Evolution-X/manifest -b bka --git-lfs`
-2. Copy [`dizi.xml`](https://github.com/g8row/dizi-bringup/blob/main/release/manifest/dizi.xml) to
+2. Copy [`dizi.xml`](https://github.com/rd-trees/dizi-bringup/blob/main/release/manifest/dizi.xml) to
    `.repo/local_manifests/`.
 3. `repo sync`
 4. Apply the platform patches in `patches/<project path>/` with `git am` in each project.
@@ -47,4 +47,4 @@ The switches are in `BoardConfig.mk`:
 
 The tablet must run HyperOS OS3.0.303.0 or newer. The ROM does not flash firmware partitions.
 
-Bring-up notes, tooling and install instructions are in [dizi-bringup](https://github.com/g8row/dizi-bringup).
+Bring-up notes, tooling and install instructions are in [dizi-bringup](https://github.com/rd-trees/dizi-bringup).
