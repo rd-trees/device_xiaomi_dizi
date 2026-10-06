@@ -28,3 +28,11 @@ power.saving.mode=1
 
 # Device name, as stock
 ro.product.marketname=Redmi Pad Pro
+
+# Screen corners: SurfaceFlinger marks SystemUI's decoration layer as a mask for the display
+# engine's rounded-corner block (SDM RC), so the corners take no source pipe (3 on SM7435).
+ro.sf.screen_decor_mask=true
+
+# GPU floor (EXPENSIVE_RENDERING, 940 MHz in powerhint.json) on every client-composed frame: the
+# Adreno governor holds 600 MHz during transitions, where SF's GPU composition then misses deadlines.
+ro.sf.gpu_composition_boost=true
