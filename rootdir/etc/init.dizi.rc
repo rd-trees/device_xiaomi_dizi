@@ -97,6 +97,22 @@ on boot
 on property:vendor.pen.state=*
     exec_background u:r:xiaomi_pen:s0 system system -- /vendor/bin/xiaomi-pen ${vendor.pen.state}
 
+# Pen pressure arrives over Bluetooth (HID report 5); xiaomi-pen-pressure relays it from the pen's
+# hidraw node to /dev/mipp_pen0, as HyperOS's Bluetooth stack does. hidraw nodes are root:usb.
+# It also grabs the IC's pen device (input) and republishes it through /dev/uinput (uhid) with
+# contact decided from that pressure, so hovering doesn't tap.
+service vendor.pen_pressure /vendor/bin/xiaomi-pen-pressure
+    class late_start
+    user system
+    group system usb input uhid
+    disabled
+
+on property:vendor.pen.state=connected
+    start vendor.pen_pressure
+
+on property:vendor.pen.state=disconnected
+    stop vendor.pen_pressure
+
 # Recover USB (MTP, adb) when the controller misses the attach at boot; without it the
 # cable has to be replugged after every boot.
 service vendor.usb_attach /vendor/bin/init.dizi.usb_attach.sh

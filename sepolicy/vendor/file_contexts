@@ -73,3 +73,5 @@
 /vendor/bin/nv_mac u:object_r:vendor_wcnss_service_exec:s0
 /vendor/bin/xiaomi-pen u:object_r:xiaomi_pen_exec:s0
 /vendor/bin/init\.dizi\.usb_attach\.sh u:object_r:vendor_qti_init_shell_exec:s0
+/dev/mipp_pen0 u:object_r:vendor_mipp_device:s0
+/vendor/bin/xiaomi-pen-pressure u:object_r:xiaomi_pen_pressure_exec:s0
