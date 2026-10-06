@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Smart Pen's pressure report (HID report 5) is mapped by hid-input to KEY_KPPLUS and
+     streams ~350 key presses a second. xiaomi-pen-pressure reads it from hidraw instead; the
+     pen's buttons come from "<name> Keyboard", which stays. -->
+<devices>
+    <device name="Redmi Smart Pen" />
+    <device name="POCO Smart Pen" />
+</devices>
